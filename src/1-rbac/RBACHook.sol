@@ -5,16 +5,9 @@ import {BaseHook} from "v4-periphery/BaseHook.sol";
 import {Hooks} from "v4-core/contracts/libraries/Hooks.sol";
 import {IPoolManager} from "v4-core/contracts/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/contracts/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "v4-core/contracts/types/PoolId.sol";
-import {BalanceDelta} from "v4-core/contracts/types/BalanceDelta.sol";
-import {Currency, CurrencyLibrary} from "v4-core/contracts/types/Currency.sol";
 import {IERC1155} from "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "forge-std/console.sol";
 
 contract RBACHook is BaseHook {
-    using PoolIdLibrary for PoolKey;
-    using CurrencyLibrary for Currency;
 
     error MissingAmulet();
     error MissingPirateCredential();
