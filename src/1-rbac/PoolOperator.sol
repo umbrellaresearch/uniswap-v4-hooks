@@ -8,20 +8,28 @@ import {BalanceDelta} from "v4-core/contracts/types/BalanceDelta.sol";
 import {Currency, CurrencyLibrary} from "v4-core/contracts/types/Currency.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
-/**
- * @title Simple example of smart contract implementing a lockCallback
- * @notice This smart contract has been simplified in purpose for the sake of readability, do not use it in production
- */
+/**                          
+ *                . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . . 
+ *               | | |\/| |(  |(  |-  |   |   |-|   |(  |-  `-. |-  |-| |(  |   |-| 
+ *               `-' '  ` `-' ' ' `-' `-' `-' ` '   ' ' `-' `-' `-' ` ' ' ' `-' ' ` 
+ *                                                                 
+ *   @title      PoolOperator
+ *   @notice     Proof of concept implementation for Pool Operator contract, in charge of managing the Pool Manager lock
+ *               in order to allow users to perform swaps and modifyPosition operations.
+ *   @author     Umbrella Research SL                 
+ */ 
 contract PoolOperator is ILockCallback {
     using CurrencyLibrary for Currency;
 
+    /// @dev Thrown when msg.sender is not the pool operator (this contract)
+    error NotPoolOperator();
+    /// @dev Thrown when msg.sender is not the Uniswap V4 Pool Manager contract
     error NotPoolManager();
+    /// @dev Thrown when actions performed while the lock has been acquired fail
     error LockFailure();
 
+    /// @dev Uniswap V4 pool manager 
     IPoolManager public immutable poolManager;
-
-    uint8 constant SWAP_ACTION = 0;
-    uint8 constant MODIFY_POSITION_ACTION = 1;
 
     constructor(IPoolManager _poolManager) {
         poolManager = _poolManager;
@@ -33,14 +41,29 @@ contract PoolOperator is ILockCallback {
         _;
     }
 
+    /// @dev Only the pool operator itself may call this function
+    modifier poolOperatorOnly() {
+        if (msg.sender != address(this)) revert NotPoolOperator();
+        _;
+    }
+
     ///////////////////////
     ////// Actions ////////
     ///////////////////////
 
+    /// @notice Performs a swap operation
+    /// @dev Requests a lock from the pool manager and when acquired, it performs the swap on the callback
+    /// @param key Uniquely identifies the pool to use for the swap
+    /// @param params Describes the swap operation
     function lockSwap(PoolKey memory key, IPoolManager.SwapParams memory params) public {
         poolManager.lock(abi.encodeCall(this.performSwap, (key, params, msg.sender)));
     }
 
+    /// @notice Modifies a liquidity position
+    /// @dev Requests a lock from the pool manager and when acquired, it performs a modifyPosition operation on the 
+    ///      callback
+    /// @param key Uniquely identifies the pool to use for the swap
+    /// @param params Describes the modifyPosition operation
     function lockModifyPosition(PoolKey memory key, IPoolManager.ModifyPositionParams memory params) public {
         poolManager.lock(abi.encodeCall(this.performModifyPosition, (key, params, msg.sender)));
     }
@@ -49,13 +72,15 @@ contract PoolOperator is ILockCallback {
     ////// Lock Acquired Callback ////////
     //////////////////////////////////////
 
+    /// @dev Callback from Uniswap V4 Pool Manager once the lock is acquired, so that pool actions can be performed.
+    ///      The data will be a payload to execute against this contract.
+    /// @param data Necessary data to perform the desired operations
     function lockAcquired(bytes calldata data) external virtual poolManagerOnly returns (bytes memory) {
         (bool success, bytes memory returnData) = address(this).call(data);
         if (success) return returnData;
         if (returnData.length == 0) revert LockFailure();
-        // if the call failed, bubble up the reason
-        /// @solidity memory-safe-assembly
-        assembly {
+        // If the call failed, bubble up the reason
+        assembly("memory-safe") {
             revert(add(returnData, 32), mload(returnData))
         }
     }
@@ -64,11 +89,14 @@ contract PoolOperator is ILockCallback {
     ////// Handlers ///////
     ///////////////////////
 
+    /// @dev Performs a swap operation only when the lock has been acquired
+    /// @param key Unique identifier for the pool
+    /// @param params Swap parameters
+    /// @param user User address who wants to perform the swap
     function performSwap(PoolKey memory key, IPoolManager.SwapParams memory params, address user)
-        external
+        external poolOperatorOnly
         returns (BalanceDelta delta)
     {
-        require(msg.sender == address(this));
         delta = poolManager.swap(key, params, abi.encode(user));
 
         if (params.zeroForOne) {
@@ -90,11 +118,14 @@ contract PoolOperator is ILockCallback {
         }
     }
 
+    /// @dev Performs a modifyPosition operation only when the lock has been acquired
+    /// @param key Unique identifier for the pool
+    /// @param params ModifyPosition parameters
+    /// @param user User address who wants to modify his liquidity position
     function performModifyPosition(PoolKey memory key, IPoolManager.ModifyPositionParams memory params, address user)
-        external
+        external poolOperatorOnly
         returns (BalanceDelta delta)
     {
-        require(msg.sender == address(this));
         // Call `modifyPosition` with the user address (initiator) encoded as `hookData`
         delta = poolManager.modifyPosition(key, params, abi.encode(user));
         // At this point, the `beforeModifyPosition` in our hook contract has already been executed
