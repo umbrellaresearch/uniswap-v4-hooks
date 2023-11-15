@@ -97,21 +97,28 @@ contract PoolOperator is ILockCallback {
         external poolOperatorOnly
         returns (BalanceDelta delta)
     {
+        // Call `swap` with the user address (initiator) encoded as `hookData`
         delta = poolManager.swap(key, params, abi.encode(user));
 
+        // Swapping token0 for token1
         if (params.zeroForOne) {
+            // User owes tokens to the pool
             if (delta.amount0() > 0) {
                 IERC20(Currency.unwrap(key.currency0)).transfer(address(poolManager), uint128(delta.amount0()));
                 poolManager.settle(key.currency0);
             }
+            // Pool owes tokens to the user
             if (delta.amount1() < 0) {
                 poolManager.take(key.currency1, user, uint128(-delta.amount1()));
             }
+        // Swapping token1 for token0
         } else {
+            // User owes tokens to the pool
             if (delta.amount1() > 0) {
                 IERC20(Currency.unwrap(key.currency1)).transfer(address(poolManager), uint128(delta.amount1()));
                 poolManager.settle(key.currency1);
             }
+            // Pool owes tokens to the user
             if (delta.amount0() < 0) {
                 poolManager.take(key.currency0, user, uint128(-delta.amount0()));
             }
