@@ -9,13 +9,13 @@ import {IERC1155} from "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.
 
 
 /**                          
-                . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . . 
-                | | |\/| |(  |(  |-  |   |   |-|   |(  |-  `-. |-  |-| |(  |   |-| 
-                `-' '  ` `-' ' ' `-' `-' `-' ` '   ' ' `-' `-' `-' ` ' ' ' `-' ' ` 
-                                                                   
-    @title      RBACHook
-    @notice     Proof of concept implementation for a Role-Based Access Hook.
-    @author     Umbrella Research SL                 
+ *              . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . . 
+ *              | | |\/| |(  |(  |-  |   |   |-|   |(  |-  `-. |-  |-| |(  |   |-| 
+ *              `-' '  ` `-' ' ' `-' `-' `-' ` '   ' ' `-' `-' `-' ` ' ' ' `-' ' ` 
+ *                                                                 
+ *  @title      RBACHook
+ *  @notice     Proof of concept implementation for a Role-Based Access Hook.
+ *  @author     Umbrella Research SL                 
 */                                                     
 contract RBACHook is BaseHook {
 
