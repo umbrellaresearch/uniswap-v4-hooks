@@ -80,7 +80,7 @@ contract RBACHook is BaseHook {
             revert NotPoolOperator();
         }
 
-        address user = abi.decode(hookData, (address));
+        address user = _getUserAddress(hookData);
 
         if (pirateChest.balanceOf(user, PIRATE_CREDENTIAL) == 0) {
             revert MissingPirateCredential();
@@ -102,12 +102,20 @@ contract RBACHook is BaseHook {
             revert NotPoolOperator();
         }
 
-        address user = abi.decode(hookData, (address));
+        address user = _getUserAddress(hookData);
 
         if (pirateChest.balanceOf(user, AMULET) == 0) {
             revert MissingAmulet();
         }
 
         return BaseHook.beforeModifyPosition.selector;
+    }
+
+    //////////////////////////////////
+    ////// Internal Functions ////////
+    //////////////////////////////////
+
+    function _getUserAddress(bytes calldata hookData) internal pure returns (address user) {
+        user = abi.decode(hookData, (address));
     }
 }
