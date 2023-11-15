@@ -10,5 +10,8 @@ out/
 # Docs
 docs/
 
+# Custom settings
+.vscode/
+
 # Dotenv file
 .env
