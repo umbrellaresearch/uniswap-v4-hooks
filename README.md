@@ -1,3 +1,5 @@
+![Captain Hook](https://miro.medium.com/v2/resize:fit:4800/format:webp/1*y7nF-hjdcVxOtF_d1Z_C3Q.png)  
+
 # Captain Hook: Uniswap Hooks Tutorial
 
 ## Intro
