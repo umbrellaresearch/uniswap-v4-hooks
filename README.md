@@ -9,7 +9,7 @@ This repository will contain 3 different proofs of concept, accompanied by a tut
 
 | Proof of Concept       | Tutorial Link                 |
 |------------------------|-------------------------------|
-| RBAC                   | [RBAC Tutorial](random_link)  |
+| RBAC                   | [RBAC Tutorial](https://medium.com/@umbrellaresearch/uniswap-v4-hooks-a-deep-dive-with-captain-hook-i-6be5d1677539)  |
 | Dynamic Fees           | Coming soon                   |
 | Liquidity Incentives   | Coming soon                   |
 
