@@ -10,7 +10,8 @@ import {Hooks} from "v4-core-last/src/libraries/Hooks.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {RealizedVolatilityOracle} from "./RealizedVolatilityOracle.sol";
 import {IDynamicFeeManager} from "v4-core-last/src/interfaces/IDynamicFeeManager.sol";
-import "forge-std/console.sol";
+
+
 /**
  *               . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . .
  *               | | |\/| |(  |(  |-  |   |   |-|   |(  |-  `-. |-  |-| |(  |   |-|
