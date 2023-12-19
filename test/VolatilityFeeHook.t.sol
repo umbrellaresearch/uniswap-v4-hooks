@@ -8,7 +8,6 @@ import {PoolManager} from "v4-core-last/src/PoolManager.sol";
 import {IPoolManager} from "v4-core-last/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core-last/src/types/PoolKey.sol";
 import {Pool} from "v4-core-last/src/libraries/Pool.sol";
-import {HookMiner} from "./utils/HookMiner.sol";
 import {PoolId, PoolIdLibrary} from "v4-core-last/src/types/PoolId.sol";
 import {CurrencyLibrary, Currency} from "v4-core-last/src/types/Currency.sol";
 import {RealizedVolatilityOracle} from "../src/2-dynamic-fees/RealizedVolatilityOracle.sol";
@@ -19,6 +18,7 @@ import {PoolModifyPositionTest} from "v4-core-last/src/test/PoolModifyPositionTe
 import {TestERC20} from "v4-core-last/src/test/TestERC20.sol";
 import {TickMath} from "v4-core-last/src/libraries/TickMath.sol";
 import {HookTest} from "./utils/HookTest.sol";
+import {HookMiner} from "./utils/HookMiner.sol";
 
 contract VolatilityFeeHookTest is Test, Deployers {
     using PoolIdLibrary for PoolKey;
@@ -36,7 +36,6 @@ contract VolatilityFeeHookTest is Test, Deployers {
 
     TestERC20 gold;
     TestERC20 silver;
-        
 
     PoolSwapTest swapRouter;
     PoolModifyPositionTest modifyPositionRouter;
@@ -46,8 +45,16 @@ contract VolatilityFeeHookTest is Test, Deployers {
     uint256 liquidityAmount = 10 ether;
     uint256 swapAmount = 1 ether;
 
+    uint256 public highVolatilityTrigger = 1400;
+    uint256 public mediumVolatilityTrigger = 1000;
+
+    uint24 public highVolatilityFee = 100;
+    uint24 public mediumVolatilityFee = 30;
+    uint24 public lowVolatilityFee = 5;
+
     address user = vm.addr(1);
     address deployerAddress = vm.addr(2);
+    address volatilityOracleUpdater = vm.addr(3);
 
     function setUp() public {
         // 1. Deploy contracts
@@ -56,14 +63,14 @@ contract VolatilityFeeHookTest is Test, Deployers {
         gold = new TestERC20(mintAmount);
         silver = new TestERC20(mintAmount);
 
-        volatilityOracle = new RealizedVolatilityOracle();
+        volatilityOracle = new RealizedVolatilityOracle(volatilityOracleUpdater);
         feeHook = VolatilityFeeHook(deployHook());
-        
+
         modifyPositionRouter = new PoolModifyPositionTest(IPoolManager(address(manager)));
         swapRouter = new PoolSwapTest(IPoolManager(address(manager)));
 
         // 2. Initialize Pool
-        uint24 DYNAMIC_FEE_FLAG = 0x800000; // 1000  // TODO: Explain how this flag works
+        uint24 DYNAMIC_FEE_FLAG = 0x800000; // 1000
 
         poolKey = PoolKey(
             Currency.wrap(address(gold)), Currency.wrap(address(silver)), DYNAMIC_FEE_FLAG, 60, IHooks(address(feeHook))
@@ -78,7 +85,9 @@ contract VolatilityFeeHookTest is Test, Deployers {
 
         modifyPositionRouter.modifyPosition(
             poolKey,
-            IPoolManager.ModifyPositionParams(TickMath.minUsableTick(60), TickMath.maxUsableTick(60), int256(liquidityAmount)),
+            IPoolManager.ModifyPositionParams(
+                TickMath.minUsableTick(60), TickMath.maxUsableTick(60), int256(liquidityAmount)
+            ),
             bytes("")
         );
     }
@@ -86,23 +95,39 @@ contract VolatilityFeeHookTest is Test, Deployers {
     function testGetFee() public {
         uint256 fee;
 
-        // Test case 1: Realized volatility > 2200
-        volatilityOracle.updateRealizedVolatility(2300);
-        fee = feeHook.getFee(address(0x00), poolKey);
-        assertEq(fee, 100, "Incorrect fee for realized volatility > 2200");
+        // Test case 1: Update volatility oracle with high volatility
+        vm.startPrank(volatilityOracleUpdater);
+        volatilityOracle.updateRealizedVolatility(highVolatilityTrigger + 1);
+        vm.stopPrank();
 
-        // Test case 2: Realized volatility < 2200 & > 1800
-        volatilityOracle.updateRealizedVolatility(2000);
+        // Get fee should return highVolatilityFee
         fee = feeHook.getFee(address(0x00), poolKey);
-        assertEq(fee, 30, "Incorrect fee for realized volatility < 2200 & > 1800");
+        assertEq(fee, highVolatilityFee, "Incorrect fee for realized volatility > highVolatilityTrigger");
 
-        // Test case 3: Realized volatility < 1800
-        volatilityOracle.updateRealizedVolatility(1500);
+        // Test case 2: Update volatility oracle with medium volatility
+        vm.startPrank(volatilityOracleUpdater);
+        volatilityOracle.updateRealizedVolatility(mediumVolatilityTrigger + 1);
+        vm.stopPrank();
+
+        // Get fee should return mediumVolatilityFee
         fee = feeHook.getFee(address(0x00), poolKey);
-        assertEq(fee, 5, "Incorrect fee for realized volatility < 1800");
+        assertEq(
+            fee,
+            mediumVolatilityFee,
+            "Incorrect fee for realized volatility < highVolatilityTrigger & > mediumVolatilityTrigger"
+        );
+
+        // Test case 3: Update volatility oracle with low volatility
+        vm.startPrank(volatilityOracleUpdater);
+        volatilityOracle.updateRealizedVolatility(mediumVolatilityTrigger - 1);
+        vm.stopPrank();
+
+        // Get fee should return lowVolatilityFee
+        fee = feeHook.getFee(address(0x00), poolKey);
+        assertEq(fee, lowVolatilityFee, "Incorrect fee for realized volatility < mediumVolatilityTrigger");
     }
 
-    function testBeforeSwap() public {
+    function testBeforeSwapUpdatesFee() public {
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: false,
             amountSpecified: int256(swapAmount),
@@ -111,26 +136,42 @@ contract VolatilityFeeHookTest is Test, Deployers {
 
         PoolSwapTest.TestSettings memory settings = PoolSwapTest.TestSettings(true, true);
 
-        // Test case 1: Realized volatility > 2200
-        volatilityOracle.updateRealizedVolatility(2300);
+        // Test case 1: Update volatility oracle with high volatility
+        vm.startPrank(volatilityOracleUpdater);
+        volatilityOracle.updateRealizedVolatility(highVolatilityTrigger + 1);
+        vm.stopPrank();
+        
+        // BeforeSwap callback should have updated the fee to highVolatilityFee
         swapRouter.swap(poolKey, params, settings, ZERO_BYTES);
         (Pool.Slot0 memory slot0HighVolatility,,,) = manager.pools(poolKey.toId());
         uint24 swapFeeHighVolatility = slot0HighVolatility.swapFee;
-        assertEq(swapFeeHighVolatility, 100, "Incorrect fee for realized volatility > 2200");
+        assertEq(swapFeeHighVolatility, highVolatilityFee, "Incorrect fee for realized volatility > highVolatilityTrigger");
 
-        // Test case 2: Realized volatility < 2200 & > 1800
-        volatilityOracle.updateRealizedVolatility(2000);
+        // Test case 2: Update volatility oracle with medium volatility
+        vm.startPrank(volatilityOracleUpdater);
+        volatilityOracle.updateRealizedVolatility(mediumVolatilityTrigger + 1);
+        vm.stopPrank();
+
+        // BeforeSwap callback should have updated the fee to mediumVolatilityFee
         swapRouter.swap(poolKey, params, settings, ZERO_BYTES);
         (Pool.Slot0 memory slot0MediumVolatility,,,) = manager.pools(poolKey.toId());
         uint24 swapFeeMediumVolatility = slot0MediumVolatility.swapFee;
-        assertEq(swapFeeMediumVolatility, 30, "Incorrect fee for realized volatility < 2200 & > 1800");
+        assertEq(
+            swapFeeMediumVolatility,
+            mediumVolatilityFee,
+            "Incorrect fee for realized volatility < highVolatilityTrigger & > mediumVolatilityTrigger"
+        );
 
-        // Test case 3: Realized volatility < 1800
-        volatilityOracle.updateRealizedVolatility(1500);
+        // Test case 3: Update volatility oracle with low volatility
+        vm.startPrank(volatilityOracleUpdater);
+        volatilityOracle.updateRealizedVolatility(mediumVolatilityTrigger - 1);
+        vm.stopPrank();
+
+        // BeforeSwap callback should have updated the fee to lowVolatilityFee
         swapRouter.swap(poolKey, params, settings, ZERO_BYTES);
         (Pool.Slot0 memory slot0LowVolatility,,,) = manager.pools(poolKey.toId());
         uint24 swapFeeLowVolatility = slot0LowVolatility.swapFee;
-        assertEq(swapFeeLowVolatility, 5, "Incorrect fee for realized volatility < 1800");
+        assertEq(swapFeeLowVolatility, lowVolatilityFee, "Incorrect fee for realized volatility < mediumVolatilityTrigger");
     }
 
     function deployHook() private returns (address) {
@@ -144,10 +185,19 @@ contract VolatilityFeeHookTest is Test, Deployers {
             flags,
             0,
             type(VolatilityFeeHook).creationCode,
-            abi.encode(address(manager), address(volatilityOracle))
+            abi.encode(
+                address(manager),
+                address(volatilityOracle),
+                highVolatilityTrigger,
+                mediumVolatilityTrigger,
+                highVolatilityFee,
+                mediumVolatilityFee,
+                lowVolatilityFee
+            )
         );
 
-        feeHook = new VolatilityFeeHook{salt: salt}(manager, volatilityOracle);
+        feeHook =
+        new VolatilityFeeHook{salt: salt}(manager, volatilityOracle, highVolatilityTrigger, mediumVolatilityTrigger, highVolatilityFee, mediumVolatilityFee, lowVolatilityFee);
 
         vm.stopPrank();
         return hookAddress;
