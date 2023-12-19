@@ -7,18 +7,16 @@ import {IPoolManager} from "v4-core/contracts/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/contracts/types/PoolKey.sol";
 import {IERC1155} from "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 
-
-/**                          
- *              . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . . 
- *              | | |\/| |(  |(  |-  |   |   |-|   |(  |-  `-. |-  |-| |(  |   |-| 
- *              `-' '  ` `-' ' ' `-' `-' `-' ` '   ' ' `-' `-' `-' ` ' ' ' `-' ' ` 
- *                                                                 
+/**
+ *              . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . .
+ *              | | |\/| |(  |(  |-  |   |   |-|   |(  |-  `-. |-  |-| |(  |   |-|
+ *              `-' '  ` `-' ' ' `-' `-' `-' ` '   ' ' `-' `-' `-' ` ' ' ' `-' ' `
+ *
  *  @title      RBACHook
  *  @notice     Proof of concept implementation for a Role-Based Access Hook.
- *  @author     Umbrella Research SL                 
-*/                                                     
+ *  @author     Umbrella Research SL
+ */
 contract RBACHook is BaseHook {
-
     /// @dev Thrown when trying to perform a modifyPosition operation without the proper credential
     error MissingAmulet();
     /// @dev Thrown when trying to perform a swap operation without the proper credential
@@ -26,7 +24,7 @@ contract RBACHook is BaseHook {
     /// @dev Thrown when the lock acquirer does not match the allowed pool operator
     error NotPoolOperator();
 
-    /// @dev IERC1155 Multi Token Standard contract that contains the credentials to operate with this pool 
+    /// @dev IERC1155 Multi Token Standard contract that contains the credentials to operate with this pool
     IERC1155 immutable pirateChest;
     /// @dev Only our specific pool operator may engage with pool to swap or modifyPosition and thus, with these hooks.
     address allowedPoolOperator;
@@ -48,7 +46,7 @@ contract RBACHook is BaseHook {
         _;
     }
 
-    /// @dev Lists the callbacks this hook implements. The hook address prefix should reflect this: 
+    /// @dev Lists the callbacks this hook implements. The hook address prefix should reflect this:
     ///      https://github.com/Uniswap/v4-core/blob/main/docs/whitepaper-v4.pdf
     function getHooksCalls() public pure override returns (Hooks.Calls memory) {
         return Hooks.Calls({

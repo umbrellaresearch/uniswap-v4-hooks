@@ -17,7 +17,6 @@ import {HookMiner} from "./utils/HookMiner.sol";
 import {TestERC20} from "v4-core/contracts/test/TestERC20.sol";
 import {PoolManager} from "v4-core/contracts/PoolManager.sol";
 import {TickMath} from "v4-core/contracts/libraries/TickMath.sol";
-import "forge-std/console.sol";
 
 contract RBACHookTest is HookTest, Deployers {
     using PoolIdLibrary for PoolKey;

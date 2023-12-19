@@ -8,16 +8,16 @@ import {BalanceDelta} from "v4-core/contracts/types/BalanceDelta.sol";
 import {Currency, CurrencyLibrary} from "v4-core/contracts/types/Currency.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
-/**                          
- *               . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . . 
- *               | | |\/| |(  |(  |-  |   |   |-|   |(  |-  `-. |-  |-| |(  |   |-| 
- *               `-' '  ` `-' ' ' `-' `-' `-' ` '   ' ' `-' `-' `-' ` ' ' ' `-' ' ` 
- *                                                                 
+/**
+ *               . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . .
+ *               | | |\/| |(  |(  |-  |   |   |-|   |(  |-  `-. |-  |-| |(  |   |-|
+ *               `-' '  ` `-' ' ' `-' `-' `-' ` '   ' ' `-' `-' `-' ` ' ' ' `-' ' `
+ *
  *   @title      PoolOperator
  *   @notice     Proof of concept implementation for Pool Operator contract, in charge of managing the Pool Manager lock
  *               in order to allow users to perform swaps and modifyPosition operations.
- *   @author     Umbrella Research SL                 
- */ 
+ *   @author     Umbrella Research SL
+ */
 contract PoolOperator is ILockCallback {
     using CurrencyLibrary for Currency;
 
@@ -28,7 +28,7 @@ contract PoolOperator is ILockCallback {
     /// @dev Thrown when actions performed while the lock has been acquired fail
     error LockFailure();
 
-    /// @dev Uniswap V4 pool manager 
+    /// @dev Uniswap V4 pool manager
     IPoolManager public immutable poolManager;
 
     constructor(IPoolManager _poolManager) {
@@ -60,7 +60,7 @@ contract PoolOperator is ILockCallback {
     }
 
     /// @notice Modifies a liquidity position
-    /// @dev Requests a lock from the pool manager and when acquired, it performs a modifyPosition operation on the 
+    /// @dev Requests a lock from the pool manager and when acquired, it performs a modifyPosition operation on the
     ///      callback
     /// @param key Uniquely identifies the pool to use for the swap
     /// @param params Describes the modifyPosition operation
@@ -80,7 +80,7 @@ contract PoolOperator is ILockCallback {
         if (success) return returnData;
         if (returnData.length == 0) revert LockFailure();
         // If the call failed, bubble up the reason
-        assembly("memory-safe") {
+        assembly ("memory-safe") {
             revert(add(returnData, 32), mload(returnData))
         }
     }
@@ -94,7 +94,8 @@ contract PoolOperator is ILockCallback {
     /// @param params Swap parameters
     /// @param user User address who wants to perform the swap
     function performSwap(PoolKey memory key, IPoolManager.SwapParams memory params, address user)
-        external poolOperatorOnly
+        external
+        poolOperatorOnly
         returns (BalanceDelta delta)
     {
         // Call `swap` with the user address (initiator) encoded as `hookData`
@@ -111,7 +112,7 @@ contract PoolOperator is ILockCallback {
             if (delta.amount1() < 0) {
                 poolManager.take(key.currency1, user, uint128(-delta.amount1()));
             }
-        // Swapping token1 for token0
+            // Swapping token1 for token0
         } else {
             // User owes tokens to the pool
             if (delta.amount1() > 0) {
@@ -130,7 +131,8 @@ contract PoolOperator is ILockCallback {
     /// @param params ModifyPosition parameters
     /// @param user User address who wants to modify his liquidity position
     function performModifyPosition(PoolKey memory key, IPoolManager.ModifyPositionParams memory params, address user)
-        external poolOperatorOnly
+        external
+        poolOperatorOnly
         returns (BalanceDelta delta)
     {
         // Call `modifyPosition` with the user address (initiator) encoded as `hookData`
