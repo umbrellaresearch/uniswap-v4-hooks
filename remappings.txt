@@ -5,6 +5,7 @@ forge-std/=lib/forge-std/src/
 openzeppelin-contracts/=lib/v4-periphery/lib/openzeppelin-contracts/
 solmate/=lib/v4-periphery/lib/solmate/src/
 v4-core/=lib/v4-periphery/lib/v4-core/
+v4-core-last/=lib/v4-core/
 v4-periphery/=lib/v4-periphery/contracts/
 lib/forge-std:ds-test/=lib/forge-std/lib/ds-test/src/
 lib/v4-periphery:@ensdomains/=lib/v4-periphery/lib/v4-core/node_modules/@ensdomains/
