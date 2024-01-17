@@ -129,7 +129,8 @@ contract VolatilityFeeHook is IDynamicFeeManager {
         uint256 realizedVolatility = volatilityOracle.realizedVolatility();
         if (realizedVolatility > uint256(highVolatilityTrigger)) {
             return highVolatilityFee;
-        } else if (realizedVolatility < highVolatilityTrigger && realizedVolatility > uint256(mediumVolatilityTrigger)) {
+        } else if (realizedVolatility < highVolatilityTrigger && realizedVolatility > uint256(mediumVolatilityTrigger))
+        {
             return mediumVolatilityFee;
         } else {
             return lowVolatilityFee;
