@@ -130,11 +130,8 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         token2.approve(address(liquidityIncentivesHook), type(uint256).max);
         token3.approve(address(liquidityIncentivesHook), type(uint256).max);
 
-        console.log("1");
         manager.initialize(keyWithLiq, SQRT_RATIO_1_1, ZERO_BYTES);
-        console.log("2");
         manager.initialize(keyWithLiqStaked, SQRT_RATIO_1_1, ZERO_BYTES);
-        console.log("3");
         liquidityIncentivesHook.addLiquidity(
             FullRange.AddLiquidityParams(
                 keyWithLiq.currency0,
