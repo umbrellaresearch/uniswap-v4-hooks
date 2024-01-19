@@ -43,10 +43,9 @@ contract StakingRewards is RewardsDistributionRecipient {
     }
 
     function lastTimeRewardApplicable() public view returns (uint256) {
-        return block.timestamp < periodFinish ? block.timestamp : periodFinish; // REVIEW : Changed from Math Library
+        return block.timestamp < periodFinish ? block.timestamp : periodFinish; 
     }
 
-    // NOTE: Modified to skip using Math Lib: TODO REVIEW
     function rewardPerToken() public view returns (uint256) {
         if (_totalSupply == 0) {
             return rewardPerTokenStored;
