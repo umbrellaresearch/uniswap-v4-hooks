@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import {FullRange} from "./FullRange.sol";
 import {IPoolManager} from "v4-core/contracts/interfaces/IPoolManager.sol";
 import {IERC20Minimal} from "v4-core/contracts/interfaces/external/IERC20Minimal.sol";
+import "./StakingRewards.sol";
 
 /**
  *               . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . .
@@ -15,42 +16,33 @@ import {IERC20Minimal} from "v4-core/contracts/interfaces/external/IERC20Minimal
  *   @author     Umbrella Research SL
  */
 
-contract LiquidityIncentivesHook is FullRange {
+contract LiquidityIncentivesHook is FullRange, StakingRewards {
     constructor(IPoolManager _poolManager, IERC20Minimal _rewardsToken, address _rewardsDistribution)
-        FullRange(_poolManager, _rewardsToken, _rewardsDistribution)
+        FullRange(_poolManager)
+        StakingRewards(_rewardsToken, _rewardsDistribution)
     {}
-
-    // /* ========== STATE VARIABLES ========== */
-
-    // IERC20 public rewardsToken;
-    // IERC20 public stakingToken;
-    // uint256 public periodFinish = 0;
-    // uint256 public rewardRate = 0;
-    // uint256 public rewardsDuration = 60 days;
-    // uint256 public lastUpdateTime;
-    // uint256 public rewardPerTokenStored;
-
-    // mapping(address => uint256) public userRewardPerTokenPaid;
-    // mapping(address => uint256) public rewards;
-
-    // uint256 private _totalSupply;
-    // mapping(address => uint256) private _balances;
-
-    // /* ========== CONSTRUCTOR ========== */
-
-    // constructor(
-    //     address _rewardsDistribution,
-    //     address _rewardsToken,
-    //     address _stakingToken
-    // ) public {
-    //     rewardsToken = IERC20(_rewardsToken);
-    //     stakingToken = IERC20(_stakingToken);
-    //     rewardsDistribution = _rewardsDistribution;
-    // }
-
-    // Hook specific functions
 
     ////////////////////////////////
     ////// Action Callbacks ////////
     ////////////////////////////////
+
+    function addLiquidityAndStake(AddLiquidityParams calldata params) external {
+        // 1: Add liquidity to the pool
+        uint256 liquidity = _addLiquidity(params);
+
+        // 2: Stake the liquidity
+        _stake(liquidity, params.to);
+    }
+
+    function removeLiquidityAndUnstake(RemoveLiquidityParams calldata params) external {
+        // 1: Remove the liquidity from the pool
+        _removeLiquidity(params);
+
+        // 2: Unstake the liquidity from the msgSender
+        _withdraw(params.liquidity, msg.sender);
+    }
+
+    function liquidityStakedPerUser(address user) external view returns (uint256) {
+        return _balances[user];
+    }
 }

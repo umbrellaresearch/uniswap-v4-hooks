@@ -20,11 +20,10 @@ import {FixedPoint96} from "v4-core/contracts/libraries/FixedPoint96.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import "v4-periphery/libraries/LiquidityAmounts.sol";
-import "./LiquidityStaker.sol";
-import "forge-std/Test.sol";
 
-contract FullRange is BaseHook, ILockCallback, Staker {
+import "v4-periphery/libraries/LiquidityAmounts.sol";
+
+contract FullRange is BaseHook, ILockCallback {
     using CurrencyLibrary for Currency;
     using PoolIdLibrary for PoolKey;
     using SafeCast for uint256;
@@ -69,7 +68,6 @@ contract FullRange is BaseHook, ILockCallback, Staker {
         uint256 amount1Min;
         address to;
         uint256 deadline;
-        bool isStaking;
     }
 
     struct RemoveLiquidityParams {
@@ -78,15 +76,11 @@ contract FullRange is BaseHook, ILockCallback, Staker {
         uint24 fee;
         uint256 liquidity;
         uint256 deadline;
-        bool isUnstaking;
     }
 
     mapping(PoolId => PoolInfo) public poolInfo;
 
-    constructor(IPoolManager _poolManager, IERC20Minimal _rewardsToken, address _rewardsDistribution)
-        BaseHook(_poolManager)
-        Staker(_rewardsToken, _rewardsDistribution)
-    {}
+    constructor(IPoolManager _poolManager) BaseHook(_poolManager) {}
 
     modifier ensure(uint256 deadline) {
         if (deadline < block.timestamp) revert ExpiredPastDeadline();
@@ -110,76 +104,58 @@ contract FullRange is BaseHook, ILockCallback, Staker {
     ////// Actions ////////
     ///////////////////////
 
-    function lockAddLiquidity(AddLiquidityParams calldata params)
+    function addLiquidity(AddLiquidityParams calldata params)
         external
         ensure(params.deadline)
         returns (uint128 liquidity)
     {
-        liquidity = _lockAddLiquidity(params);
-        
-        // Generate a LP token as a receipt is it is not staking
-        if (!params.isStaking) {
-            PoolKey memory key = PoolKey({
-                currency0: params.currency0,
-                currency1: params.currency1,
-                fee: params.fee,
-                tickSpacing: 60,
-                hooks: IHooks(address(this))
-            });
+        // 1. Add liquidity to the pool
+        // @dev Most of the logic from the original contractwas moved to an internal function to separate liquidity provision from LP token creation.
+        // This will be useful to reuse the same logic on an addLiquidityAndStake function, where it won't be necessary to issue a LP token
+        liquidity = _addLiquidity(params);
 
-            PoolId poolId = key.toId();
+        PoolKey memory key = PoolKey({
+            currency0: params.currency0,
+            currency1: params.currency1,
+            fee: params.fee,
+            tickSpacing: 60,
+            hooks: IHooks(address(this))
+        });
 
-            PoolInfo storage pool = poolInfo[poolId];
-
-            UniswapV4ERC20(pool.liquidityToken).mint(params.to, liquidity);
-        } else {
-            __stake(liquidity, params.to);
-        }
+        // 2. Send a receipt token to the user
+        PoolId poolId = key.toId();
+        PoolInfo storage pool = poolInfo[poolId];
+        UniswapV4ERC20(pool.liquidityToken).mint(params.to, liquidity);
         return liquidity;
     }
 
-    function lockRemoveLiquidity(RemoveLiquidityParams calldata params)
+    function removeLiquidity(RemoveLiquidityParams calldata params)
         public
         virtual
         ensure(params.deadline)
         returns (BalanceDelta delta)
     {
-        console.log("lockRemoveLiquidity");
-        delta = _lockRemoveLiquidity(params);
-        console.log("lockRemoveLiquidity 2");
+        // 1. Remove liquidity from the pool
+        // @dev Most of the logic from the original contract was moved to an internal function to separate liquidity provision from LP token creation.
+        // This will be useful to reuse the same logic on an addLiquidityAndStake function, where it won't be necessary to issue a LP token
+        delta = _removeLiquidity(params);
 
-        // Burn LP token as a receipt is it is not unStaking
-        if (!params.isUnstaking) {
-            console.log("lockRemoveLiquidity 3");
-            PoolKey memory key = PoolKey({
-                currency0: params.currency0,
-                currency1: params.currency1,
-                fee: params.fee,
-                tickSpacing: 60,
-                hooks: IHooks(address(this))
-            });
+        PoolKey memory key = PoolKey({
+            currency0: params.currency0,
+            currency1: params.currency1,
+            fee: params.fee,
+            tickSpacing: 60,
+            hooks: IHooks(address(this))
+        });
 
-            PoolId poolId = key.toId();
-
-            PoolInfo storage pool = poolInfo[poolId];
-
-            UniswapV4ERC20(pool.liquidityToken).burn(msg.sender, params.liquidity);
-        } else {
-            console.log("lockRemoveLiquidity 4");
-            __withdraw(params.liquidity, msg.sender);
-        }
-
+        // 2. Burn the receipt token from the user
+        PoolId poolId = key.toId();
+        PoolInfo storage pool = poolInfo[poolId];
+        UniswapV4ERC20(pool.liquidityToken).burn(msg.sender, params.liquidity);
         return delta;
     }
 
-    function modifyPosition(PoolKey memory key, IPoolManager.ModifyPositionParams memory params)
-        internal
-        returns (BalanceDelta delta)
-    {
-        delta = abi.decode(poolManager.lock(abi.encode(CallbackData(msg.sender, key, params))), (BalanceDelta));
-    }
-
-    function _lockAddLiquidity(AddLiquidityParams calldata params)
+    function _addLiquidity(AddLiquidityParams calldata params)
         internal
         ensure(params.deadline)
         returns (uint128 liquidity)
@@ -233,7 +209,7 @@ contract FullRange is BaseHook, ILockCallback, Staker {
         }
     }
 
-    function _lockRemoveLiquidity(RemoveLiquidityParams calldata params)
+    function _removeLiquidity(RemoveLiquidityParams calldata params)
         public
         virtual
         ensure(params.deadline)
@@ -282,10 +258,6 @@ contract FullRange is BaseHook, ILockCallback, Staker {
         return abi.encode(delta);
     }
 
-    ////////////////////////////////
-    ////// Action Callbacks ////////
-    ////////////////////////////////
-
     function beforeInitialize(address, PoolKey calldata key, uint160, bytes calldata)
         external
         override
@@ -295,19 +267,17 @@ contract FullRange is BaseHook, ILockCallback, Staker {
 
         PoolId poolId = key.toId();
 
-        // string memory tokenSymbol = string(
-        //     abi.encodePacked(
-        //         "UniV4",
-        //         "-",
-        //         IERC20Metadata(Currency.unwrap(key.currency0)).symbol(),   // TODO FIX
-        //         "-",
-        //         IERC20Metadata(Currency.unwrap(key.currency1)).symbol(),
-        //         "-",
-        //         Strings.toString(uint256(key.fee))
-        //     )
-        // );
-
-        string memory tokenSymbol = "uni";
+        string memory tokenSymbol = string(
+            abi.encodePacked(
+                "UniV4",
+                "-",
+                IERC20Metadata(Currency.unwrap(key.currency0)).symbol(), // TODO FIX
+                "-",
+                IERC20Metadata(Currency.unwrap(key.currency1)).symbol(),
+                "-",
+                Strings.toString(uint256(key.fee))
+            )
+        );
 
         address poolToken = address(new UniswapV4ERC20(tokenSymbol, tokenSymbol));
 
@@ -342,9 +312,12 @@ contract FullRange is BaseHook, ILockCallback, Staker {
         return IHooks.beforeSwap.selector;
     }
 
-    /////////////////////////////////
-    ////////   Helpers   ///////////
-    ////////////////////////////////
+    function modifyPosition(PoolKey memory key, IPoolManager.ModifyPositionParams memory params)
+        internal
+        returns (BalanceDelta delta)
+    {
+        delta = abi.decode(poolManager.lock(abi.encode(CallbackData(msg.sender, key, params))), (BalanceDelta));
+    }
 
     function _settleDeltas(address sender, PoolKey memory key, BalanceDelta delta) internal {
         _settleDelta(sender, key.currency0, uint128(delta.amount0()));
@@ -380,13 +353,14 @@ contract FullRange is BaseHook, ILockCallback, Staker {
             _rebalance(key);
         }
 
+        // NOTE This lines of code have been commented out. They break the functionality of staking since liquidity and totalSupply is not the same when we stake.
+        // TODO Review this
+
         // uint256 liquidityToRemove = FullMath.mulDiv(
         //     uint256(-params.liquidityDelta),
         //     poolManager.getLiquidity(poolId),
         //     UniswapV4ERC20(pool.liquidityToken).totalSupply()
         // );
-        // TODO: UNDERSTAND THIS
-        // console.log("liquidityToRemove", liquidityToRemove);
 
         // params.liquidityDelta = -(liquidityToRemove.toInt256());
         delta = poolManager.modifyPosition(key, params, ZERO_BYTES);

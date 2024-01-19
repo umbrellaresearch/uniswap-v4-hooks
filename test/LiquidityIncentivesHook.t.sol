@@ -11,13 +11,13 @@ import {Pool} from "v4-core/contracts/libraries/Pool.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/contracts/types/PoolId.sol";
 import {Deployers} from "v4-core/test/foundry-tests/utils/Deployers.sol";
 import {CurrencyLibrary, Currency} from "v4-core/contracts/types/Currency.sol";
-
+import {MockERC20} from "v4-core/test/foundry-tests/utils/MockERC20.sol";
 import {RealizedVolatilityOracle} from "../src/2-dynamic-fees/RealizedVolatilityOracle.sol";
 import {LiquidityIncentivesHook} from "../src/3-liquidity-incentives/LiquidityIncentivesHook.sol";
+import {IERC20Minimal} from "v4-core/contracts/interfaces/external/IERC20Minimal.sol";
 import {Deployers} from "v4-core/test/foundry-tests/utils/Deployers.sol";
 import {PoolSwapTest} from "v4-core/contracts/test/PoolSwapTest.sol";
 import {PoolModifyPositionTest} from "v4-core/contracts/test/PoolModifyPositionTest.sol";
-import {TestERC20} from "v4-core/contracts/test/TestERC20.sol";
 import {TickMath} from "v4-core/contracts/libraries/TickMath.sol";
 import {FullRange} from "../src/3-liquidity-incentives/FullRange.sol";
 import {HookTest} from "./utils/HookTest.sol";
@@ -31,8 +31,8 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
     Pool.State state;
 
     PoolManager manager;
-    FullRange liquidityIncentivesHook;
-    TestERC20 rewardsToken;
+    LiquidityIncentivesHook liquidityIncentivesHook;
+    MockERC20 rewardsToken;
 
     int24 constant TICK_SPACING = 60;
     uint16 constant LOCKED_LIQUIDITY = 1000; // TODO UNDERSTAND THIS NUMBER
@@ -41,10 +41,10 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
     uint8 constant DUST = 30;
     uint256 constant TOTAL_REWARDS_AMOUNT = 100000 ether;
 
-    TestERC20 token0;
-    TestERC20 token1;
-    TestERC20 token2;
-    TestERC20 token3;
+    MockERC20 token0;
+    MockERC20 token1;
+    MockERC20 token2;
+    MockERC20 token3;
 
     Currency currency0;
     Currency currency1;
@@ -75,22 +75,16 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
     PoolSwapTest swapRouter;
 
     function setUp() public {
-        console.log("setting up");
-        token0 = new TestERC20(2 ** 128);
-        token1 = new TestERC20(2 ** 128);
-        token2 = new TestERC20(2 ** 128);
-        token3 = new TestERC20(2 ** 128);
+        token0 = new MockERC20("TestA", "A", 18, 2 ** 128);
+        token1 = new MockERC20("TestB", "B", 18, 2 ** 128);
+        token2 = new MockERC20("TestC", "C", 18, 2 ** 128);
+        token3 = new MockERC20("TestD", "D", 18, 2 ** 128);
 
-        rewardsToken = new TestERC20(TOTAL_REWARDS_AMOUNT);
-
-        console.log("balance of rewards token", rewardsToken.balanceOf(address(this)));
-
+        rewardsToken = new MockERC20("TestE", "E", 18, TOTAL_REWARDS_AMOUNT);
         manager = new PoolManager(500000);
 
         address liquidityIncentivesHookAddress = deployHook();
-        liquidityIncentivesHook = FullRange(liquidityIncentivesHookAddress);
-
-        console.log("deployed hook at address %s", liquidityIncentivesHookAddress);
+        liquidityIncentivesHook = LiquidityIncentivesHook(liquidityIncentivesHookAddress);
 
         key = PoolKey(
             Currency.wrap(address(token1)),
@@ -102,8 +96,8 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         id = key.toId();
 
         key2 = PoolKey(
-            Currency.wrap(address(token1)),
             Currency.wrap(address(token2)),
+            Currency.wrap(address(token1)),
             3000,
             60,
             IHooks(liquidityIncentivesHookAddress)
@@ -136,13 +130,12 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         token2.approve(address(liquidityIncentivesHook), type(uint256).max);
         token3.approve(address(liquidityIncentivesHook), type(uint256).max);
 
-        console.log("setting up done, initializing");
-
+        console.log("1");
         manager.initialize(keyWithLiq, SQRT_RATIO_1_1, ZERO_BYTES);
+        console.log("2");
         manager.initialize(keyWithLiqStaked, SQRT_RATIO_1_1, ZERO_BYTES);
-
-        console.log("initialized, adding liquidity");
-        liquidityIncentivesHook.lockAddLiquidity(
+        console.log("3");
+        liquidityIncentivesHook.addLiquidity(
             FullRange.AddLiquidityParams(
                 keyWithLiq.currency0,
                 keyWithLiq.currency1,
@@ -152,13 +145,11 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
                 99 ether,
                 99 ether,
                 address(this),
-                MAX_DEADLINE,
-                false
+                MAX_DEADLINE
             )
         );
 
-        console.log("liquidity added, staking");
-        liquidityIncentivesHook.lockAddLiquidity(
+        liquidityIncentivesHook.addLiquidityAndStake(
             FullRange.AddLiquidityParams(
                 keyWithLiqStaked.currency0,
                 keyWithLiqStaked.currency1,
@@ -168,11 +159,9 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
                 99 ether,
                 99 ether,
                 address(this),
-                MAX_DEADLINE,
-                true
+                MAX_DEADLINE
             )
         );
-        console.log("staking done");
 
         rewardsToken.transfer(address(liquidityIncentivesHook), TOTAL_REWARDS_AMOUNT);
 
@@ -190,13 +179,11 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
     function testFullRange_addLiquidity_withoutStaking() public {
         manager.initialize(key, SQRT_RATIO_1_1, ZERO_BYTES);
 
-        bool isStaking = false;
-
         (, address liquidityToken) = liquidityIncentivesHook.poolInfo(idWithLiq);
 
         uint256 prevBalance0 = keyWithLiq.currency0.balanceOf(address(this));
         uint256 prevBalance1 = keyWithLiq.currency1.balanceOf(address(this));
-        uint256 prevLiquidityTokenBal = TestERC20(liquidityToken).balanceOf(address(this));
+        uint256 prevLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 prevLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 prevTotalLiquidity = manager.getLiquidity(idWithLiq);
 
@@ -209,17 +196,16 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
             9 ether,
             9 ether,
             address(this),
-            MAX_DEADLINE,
-            isStaking
+            MAX_DEADLINE
         );
 
-        liquidityIncentivesHook.lockAddLiquidity(addLiquidityParams);
+        liquidityIncentivesHook.addLiquidity(addLiquidityParams);
 
         (bool hasAccruedFees,) = liquidityIncentivesHook.poolInfo(idWithLiq);
 
         uint256 postBalance0 = keyWithLiq.currency0.balanceOf(address(this));
         uint256 postBalance1 = keyWithLiq.currency1.balanceOf(address(this));
-        uint256 postLiquidityTokenBal = TestERC20(liquidityToken).balanceOf(address(this));
+        uint256 postLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 postLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 postTotalLiquidity = manager.getLiquidity(idWithLiq);
 
@@ -237,13 +223,11 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
     function testFullRange_addLiquidity_staking() public {
         manager.initialize(key, SQRT_RATIO_1_1, ZERO_BYTES);
 
-        bool isStaking = true;
-
         (, address liquidityToken) = liquidityIncentivesHook.poolInfo(idWithLiq);
 
         uint256 prevBalance0 = keyWithLiq.currency0.balanceOf(address(this));
         uint256 prevBalance1 = keyWithLiq.currency1.balanceOf(address(this));
-        uint256 prevLiquidityTokenBal = TestERC20(liquidityToken).balanceOf(address(this));
+        uint256 prevLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 prevLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 prevTotalLiquidity = manager.getLiquidity(idWithLiq);
 
@@ -256,30 +240,24 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
             9 ether,
             9 ether,
             address(this),
-            MAX_DEADLINE,
-            isStaking
+            MAX_DEADLINE
         );
 
-        liquidityIncentivesHook.lockAddLiquidity(addLiquidityParams);
+        liquidityIncentivesHook.addLiquidityAndStake(addLiquidityParams);
 
         (bool hasAccruedFees,) = liquidityIncentivesHook.poolInfo(idWithLiq);
 
         uint256 postBalance0 = keyWithLiq.currency0.balanceOf(address(this));
         uint256 postBalance1 = keyWithLiq.currency1.balanceOf(address(this));
-        uint256 postLiquidityTokenBal = TestERC20(liquidityToken).balanceOf(address(this));
+        uint256 postLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 postLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 postTotalLiquidity = manager.getLiquidity(idWithLiq);
 
         assertEq(postBalance0, prevBalance0 - 10 ether);
-        console.log("postBalance0", postBalance0);
         assertEq(postBalance1, prevBalance1 - 10 ether);
-        console.log("postBalance1", postBalance1);
         assertEq(postLiquidityTokenBal, prevLiquidityTokenBal);
-        console.log("postLiquidityTokenBal", postLiquidityTokenBal);
         assertEq(postLiquidityStaked, prevLiquidityStaked + 10 ether);
-        console.log("postLiquidityStaked", postLiquidityStaked);
         assertEq(postTotalLiquidity, prevTotalLiquidity + 10 ether);
-        console.log("postTotalLiquidity", postTotalLiquidity);
         assertEq(hasAccruedFees, false);
     }
 
@@ -290,29 +268,26 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
     function testFullRange_removeLiquidity_withoutUnstaking() public {
         manager.initialize(key, SQRT_RATIO_1_1, ZERO_BYTES);
 
-        bool isUnstaking = false;
-
         (, address liquidityToken) = liquidityIncentivesHook.poolInfo(idWithLiq);
 
         uint256 prevBalance0 = keyWithLiq.currency0.balanceOf(address(this));
         uint256 prevBalance1 = keyWithLiq.currency1.balanceOf(address(this));
-        uint256 prevLiquidityTokenBal = TestERC20(liquidityToken).balanceOf(address(this));
+        uint256 prevLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 prevLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 prevTotalLiquidity = manager.getLiquidity(idWithLiq);
 
-        TestERC20(liquidityToken).approve(address(liquidityIncentivesHook), type(uint256).max);
+        MockERC20(liquidityToken).approve(address(liquidityIncentivesHook), type(uint256).max);
 
-        FullRange.RemoveLiquidityParams memory removeLiquidityParams = FullRange.RemoveLiquidityParams(
-            keyWithLiq.currency0, keyWithLiq.currency1, 3000, 1 ether, MAX_DEADLINE, isUnstaking
-        );
+        FullRange.RemoveLiquidityParams memory removeLiquidityParams =
+            FullRange.RemoveLiquidityParams(keyWithLiq.currency0, keyWithLiq.currency1, 3000, 1 ether, MAX_DEADLINE);
 
-        liquidityIncentivesHook.lockRemoveLiquidity(removeLiquidityParams);
+        liquidityIncentivesHook.removeLiquidity(removeLiquidityParams);
 
         (bool hasAccruedFees,) = liquidityIncentivesHook.poolInfo(idWithLiq);
 
         uint256 postBalance0 = keyWithLiq.currency0.balanceOf(address(this));
         uint256 postBalance1 = keyWithLiq.currency1.balanceOf(address(this));
-        uint256 postLiquidityTokenBal = TestERC20(liquidityToken).balanceOf(address(this));
+        uint256 postLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 postLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 postTotalLiquidity = manager.getLiquidity(idWithLiq);
 
@@ -328,29 +303,27 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
     function testFullRange_removeLiquidity_unstaking() public {
         manager.initialize(key, SQRT_RATIO_1_1, ZERO_BYTES);
 
-        bool isUnstaking = true;
-
         (, address liquidityToken) = liquidityIncentivesHook.poolInfo(idWithLiqStaked);
 
         uint256 prevBalance0 = keyWithLiqStaked.currency0.balanceOf(address(this));
         uint256 prevBalance1 = keyWithLiqStaked.currency1.balanceOf(address(this));
-        uint256 prevLiquidityTokenBal = TestERC20(liquidityToken).balanceOf(address(this));
+        uint256 prevLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 prevLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 prevTotalLiquidity = manager.getLiquidity(idWithLiqStaked);
 
-        TestERC20(liquidityToken).approve(address(liquidityIncentivesHook), type(uint256).max);
+        MockERC20(liquidityToken).approve(address(liquidityIncentivesHook), type(uint256).max);
 
         FullRange.RemoveLiquidityParams memory removeLiquidityParams = FullRange.RemoveLiquidityParams(
-            keyWithLiqStaked.currency0, keyWithLiqStaked.currency1, 3000, 1 ether, MAX_DEADLINE, isUnstaking
+            keyWithLiqStaked.currency0, keyWithLiqStaked.currency1, 3000, 1 ether, MAX_DEADLINE
         );
 
-        liquidityIncentivesHook.lockRemoveLiquidity(removeLiquidityParams);
+        liquidityIncentivesHook.removeLiquidityAndUnstake(removeLiquidityParams);
 
         (bool hasAccruedFees,) = liquidityIncentivesHook.poolInfo(idWithLiqStaked);
 
         uint256 postBalance0 = keyWithLiqStaked.currency0.balanceOf(address(this));
         uint256 postBalance1 = keyWithLiqStaked.currency1.balanceOf(address(this));
-        uint256 postLiquidityTokenBal = TestERC20(liquidityToken).balanceOf(address(this));
+        uint256 postLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 postLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 postTotalLiquidity = manager.getLiquidity(idWithLiqStaked);
 
@@ -376,13 +349,7 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         liquidityIncentivesHook.getReward();
 
         uint256 postRewardsTokenBalance = rewardsToken.balanceOf(address(this));
-
-        console.log("prevRewardsTokenBalance", prevRewardsTokenBalance);
-        console.log("postRewardsTokenBalance", postRewardsTokenBalance);
-
         uint256 amountPerMilliSecond = TOTAL_REWARDS_AMOUNT * 1000 / 60 days;
-
-        console.log("amountPerSecond", amountPerMilliSecond);
 
         assertGt(postRewardsTokenBalance, prevRewardsTokenBalance);
     }
@@ -398,15 +365,12 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
             deployerAddress,
             flags,
             0,
-            type(FullRange).creationCode,
+            type(LiquidityIncentivesHook).creationCode,
             abi.encode(address(manager), address(rewardsToken), rewardsDistribution)
         );
 
-        console.log("deploying hook at address %s", hookAddress);
-
-        liquidityIncentivesHook = new FullRange{salt: salt}(manager, rewardsToken, rewardsDistribution);
-
-        console.log("deployed hook at address %s", hookAddress);
+        liquidityIncentivesHook =
+            new LiquidityIncentivesHook{salt: salt}(manager, IERC20Minimal(address(rewardsToken)), rewardsDistribution);
 
         vm.stopPrank();
         return hookAddress;
