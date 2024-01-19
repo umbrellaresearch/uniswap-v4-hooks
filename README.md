@@ -1,4 +1,4 @@
-![Captain Hook](https://miro.medium.com/v2/resize:fit:4800/format:webp/1*y7nF-hjdcVxOtF_d1Z_C3Q.png)  
+![Captain Hook](https://miro.medium.com/v2/resize:fit:1400/format:webp/1*pyGIlCX_v1CumaAEaMqR1A.png)  
 
 # Captain Hook: Uniswap Hooks Tutorial
 
@@ -10,7 +10,7 @@ This repository will contain 3 different proofs of concept, accompanied by a tut
 | Proof of Concept       | Tutorial Link                 |
 |------------------------|-------------------------------|
 | RBAC                   | [RBAC Tutorial](https://medium.com/@umbrellaresearch/uniswap-v4-hooks-a-deep-dive-with-captain-hook-i-6be5d1677539)  |
-| Dynamic Fees           | Coming soon                   |
+| Dynamic Fees           | [Dynamic Fees Tutorial](https://medium.com/@umbrellaresearch/uniswap-v4-hooks-a-deep-dive-with-captain-hook-ii-44b0efc84e45) |
 | Liquidity Incentives   | Coming soon                   |
 
 ## Install
