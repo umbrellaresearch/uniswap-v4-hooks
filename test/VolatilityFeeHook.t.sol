@@ -140,12 +140,14 @@ contract VolatilityFeeHookTest is Test, Deployers {
         vm.startPrank(volatilityOracleUpdater);
         volatilityOracle.updateRealizedVolatility(highVolatilityTrigger + 1);
         vm.stopPrank();
-        
+
         // BeforeSwap callback should have updated the fee to highVolatilityFee
         swapRouter.swap(poolKey, params, settings, ZERO_BYTES);
         (Pool.Slot0 memory slot0HighVolatility,,,) = manager.pools(poolKey.toId());
         uint24 swapFeeHighVolatility = slot0HighVolatility.swapFee;
-        assertEq(swapFeeHighVolatility, highVolatilityFee, "Incorrect fee for realized volatility > highVolatilityTrigger");
+        assertEq(
+            swapFeeHighVolatility, highVolatilityFee, "Incorrect fee for realized volatility > highVolatilityTrigger"
+        );
 
         // Test case 2: Update volatility oracle with medium volatility
         vm.startPrank(volatilityOracleUpdater);
@@ -171,7 +173,9 @@ contract VolatilityFeeHookTest is Test, Deployers {
         swapRouter.swap(poolKey, params, settings, ZERO_BYTES);
         (Pool.Slot0 memory slot0LowVolatility,,,) = manager.pools(poolKey.toId());
         uint24 swapFeeLowVolatility = slot0LowVolatility.swapFee;
-        assertEq(swapFeeLowVolatility, lowVolatilityFee, "Incorrect fee for realized volatility < mediumVolatilityTrigger");
+        assertEq(
+            swapFeeLowVolatility, lowVolatilityFee, "Incorrect fee for realized volatility < mediumVolatilityTrigger"
+        );
     }
 
     function deployHook() private returns (address) {
