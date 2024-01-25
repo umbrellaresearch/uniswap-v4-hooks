@@ -34,11 +34,8 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
     LiquidityIncentivesHook liquidityIncentivesHook;
     MockERC20 rewardsToken;
 
-    int24 constant TICK_SPACING = 60;
-    uint16 constant LOCKED_LIQUIDITY = 1000; // TODO UNDERSTAND THIS NUMBER
     uint256 constant MAX_DEADLINE = 12329839823;
     uint256 constant MAX_TICK_LIQUIDITY = 11505069308564788430434325881101412;
-    uint8 constant DUST = 30;
     uint256 constant TOTAL_REWARDS_AMOUNT = 100000 ether;
 
     MockERC20 token0;
@@ -52,10 +49,6 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
     address deployerAddress = address(1);
     address user = address(2);
     address rewardsDistribution = address(3);
-
-    // FullRangeImplementation fullRange = FullRangeImplementation(
-    //     address(uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_MODIFY_POSITION_FLAG | Hooks.BEFORE_SWAP_FLAG))
-    // );
 
     PoolKey key;
     PoolId id;
@@ -105,7 +98,7 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         id2 = key.toId();
 
         keyWithLiq = PoolKey(
-            Currency.wrap(address(token2)), // TODO CHANGE IT WHEN FIXED SYMBOL ISSUE
+            Currency.wrap(address(token2)),
             Currency.wrap(address(token0)),
             3000,
             60,
@@ -114,7 +107,7 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         idWithLiq = keyWithLiq.toId();
 
         keyWithLiqStaked = PoolKey(
-            Currency.wrap(address(token3)), // TODO CHANGE IT WHEN FIXED SYMBOL ISSUE
+            Currency.wrap(address(token3)),
             Currency.wrap(address(token0)),
             3000,
             60,
@@ -178,6 +171,8 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
 
         (, address liquidityToken) = liquidityIncentivesHook.poolInfo(idWithLiq);
 
+        uint256 liquidityAmount = 10 ether;
+
         uint256 prevBalance0 = keyWithLiq.currency0.balanceOf(address(this));
         uint256 prevBalance1 = keyWithLiq.currency1.balanceOf(address(this));
         uint256 prevLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
@@ -188,8 +183,8 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
             keyWithLiq.currency0,
             keyWithLiq.currency1,
             3000,
-            10 ether,
-            10 ether,
+            liquidityAmount,
+            liquidityAmount,
             9 ether,
             9 ether,
             address(this),
@@ -206,11 +201,11 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         uint256 postLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 postTotalLiquidity = manager.getLiquidity(idWithLiq);
 
-        assertEq(postBalance0, prevBalance0 - 10 ether);
-        assertEq(postBalance1, prevBalance1 - 10 ether);
-        assertEq(postLiquidityTokenBal, prevLiquidityTokenBal + 10 ether);
+        assertEq(postBalance0, prevBalance0 - liquidityAmount);
+        assertEq(postBalance1, prevBalance1 - liquidityAmount);
+        assertEq(postLiquidityTokenBal, prevLiquidityTokenBal + liquidityAmount);
         assertEq(postLiquidityStaked, prevLiquidityStaked);
-        assertEq(postTotalLiquidity, prevTotalLiquidity + 10 ether);
+        assertEq(postTotalLiquidity, prevTotalLiquidity + liquidityAmount);
 
         assertEq(hasAccruedFees, false);
     }
@@ -222,6 +217,9 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
 
         (, address liquidityToken) = liquidityIncentivesHook.poolInfo(idWithLiq);
 
+        uint256 liquidityAmount = 10 ether;
+
+
         uint256 prevBalance0 = keyWithLiq.currency0.balanceOf(address(this));
         uint256 prevBalance1 = keyWithLiq.currency1.balanceOf(address(this));
         uint256 prevLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
@@ -232,8 +230,8 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
             keyWithLiq.currency0,
             keyWithLiq.currency1,
             3000,
-            10 ether,
-            10 ether,
+            liquidityAmount,
+            liquidityAmount,
             9 ether,
             9 ether,
             address(this),
@@ -250,11 +248,11 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         uint256 postLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 postTotalLiquidity = manager.getLiquidity(idWithLiq);
 
-        assertEq(postBalance0, prevBalance0 - 10 ether);
-        assertEq(postBalance1, prevBalance1 - 10 ether);
+        assertEq(postBalance0, prevBalance0 - liquidityAmount);
+        assertEq(postBalance1, prevBalance1 - liquidityAmount);
         assertEq(postLiquidityTokenBal, prevLiquidityTokenBal);
-        assertEq(postLiquidityStaked, prevLiquidityStaked + 10 ether);
-        assertEq(postTotalLiquidity, prevTotalLiquidity + 10 ether);
+        assertEq(postLiquidityStaked, prevLiquidityStaked + liquidityAmount);
+        assertEq(postTotalLiquidity, prevTotalLiquidity + liquidityAmount);
         assertEq(hasAccruedFees, false);
     }
 
@@ -267,32 +265,35 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
 
         (, address liquidityToken) = liquidityIncentivesHook.poolInfo(idWithLiq);
 
+        uint256 removedLiquidityAmount = 1 ether;
+
         uint256 prevBalance0 = keyWithLiq.currency0.balanceOf(address(this));
-        uint256 prevBalance1 = keyWithLiq.currency1.balanceOf(address(this));
+
         uint256 prevLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 prevLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 prevTotalLiquidity = manager.getLiquidity(idWithLiq);
 
         MockERC20(liquidityToken).approve(address(liquidityIncentivesHook), type(uint256).max);
 
-        FullRange.RemoveLiquidityParams memory removeLiquidityParams =
-            FullRange.RemoveLiquidityParams(keyWithLiq.currency0, keyWithLiq.currency1, 3000, 1 ether, MAX_DEADLINE);
+        FullRange.RemoveLiquidityParams memory removeLiquidityParams = FullRange.RemoveLiquidityParams(
+            keyWithLiq.currency0, keyWithLiq.currency1, 3000, removedLiquidityAmount, MAX_DEADLINE
+        );
 
         liquidityIncentivesHook.removeLiquidity(removeLiquidityParams);
 
         (bool hasAccruedFees,) = liquidityIncentivesHook.poolInfo(idWithLiq);
 
         uint256 postBalance0 = keyWithLiq.currency0.balanceOf(address(this));
-        uint256 postBalance1 = keyWithLiq.currency1.balanceOf(address(this));
+
         uint256 postLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 postLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 postTotalLiquidity = manager.getLiquidity(idWithLiq);
 
-        assertEq(postBalance0, prevBalance0 + 1 ether - 1);
-        assertEq(postBalance0, prevBalance0 + 1 ether - 1);
-        assertEq(postLiquidityTokenBal, prevLiquidityTokenBal - 1 ether);
+        assertEq(postBalance0, prevBalance0 + removedLiquidityAmount - 1);
+        assertEq(postBalance0, prevBalance0 + removedLiquidityAmount - 1);
+        assertEq(postLiquidityTokenBal, prevLiquidityTokenBal - removedLiquidityAmount);
         assertEq(postLiquidityStaked, prevLiquidityStaked);
-        assertEq(postTotalLiquidity, prevTotalLiquidity - 1 ether);
+        assertEq(postTotalLiquidity, prevTotalLiquidity - removedLiquidityAmount);
 
         assertEq(hasAccruedFees, false);
     }
@@ -302,8 +303,9 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
 
         (, address liquidityToken) = liquidityIncentivesHook.poolInfo(idWithLiqStaked);
 
+        uint256 removedLiquidityAmount = 1 ether;
+
         uint256 prevBalance0 = keyWithLiqStaked.currency0.balanceOf(address(this));
-        uint256 prevBalance1 = keyWithLiqStaked.currency1.balanceOf(address(this));
         uint256 prevLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 prevLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 prevTotalLiquidity = manager.getLiquidity(idWithLiqStaked);
@@ -311,7 +313,7 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         MockERC20(liquidityToken).approve(address(liquidityIncentivesHook), type(uint256).max);
 
         FullRange.RemoveLiquidityParams memory removeLiquidityParams = FullRange.RemoveLiquidityParams(
-            keyWithLiqStaked.currency0, keyWithLiqStaked.currency1, 3000, 1 ether, MAX_DEADLINE
+            keyWithLiqStaked.currency0, keyWithLiqStaked.currency1, 3000, removedLiquidityAmount, MAX_DEADLINE
         );
 
         liquidityIncentivesHook.removeLiquidityAndUnstake(removeLiquidityParams);
@@ -319,16 +321,15 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         (bool hasAccruedFees,) = liquidityIncentivesHook.poolInfo(idWithLiqStaked);
 
         uint256 postBalance0 = keyWithLiqStaked.currency0.balanceOf(address(this));
-        uint256 postBalance1 = keyWithLiqStaked.currency1.balanceOf(address(this));
         uint256 postLiquidityTokenBal = MockERC20(liquidityToken).balanceOf(address(this));
         uint256 postLiquidityStaked = liquidityIncentivesHook.liquidityStakedPerUser(address(this));
         uint256 postTotalLiquidity = manager.getLiquidity(idWithLiqStaked);
 
-        assertEq(postBalance0, prevBalance0 + 1 ether - 1);
-        assertEq(postBalance0, prevBalance0 + 1 ether - 1);
+        assertEq(postBalance0, prevBalance0 + removedLiquidityAmount - 1);
+        assertEq(postBalance0, prevBalance0 + removedLiquidityAmount - 1);
         assertEq(postLiquidityTokenBal, prevLiquidityTokenBal);
-        assertEq(postLiquidityStaked, prevLiquidityStaked - 1 ether);
-        assertEq(postTotalLiquidity, prevTotalLiquidity - 1 ether);
+        assertEq(postLiquidityStaked, prevLiquidityStaked - removedLiquidityAmount);
+        assertEq(postTotalLiquidity, prevTotalLiquidity - removedLiquidityAmount);
 
         assertEq(hasAccruedFees, false);
     }
@@ -346,8 +347,6 @@ contract LiquidityIncentivesHookTest is Test, Deployers {
         liquidityIncentivesHook.getReward();
 
         uint256 postRewardsTokenBalance = rewardsToken.balanceOf(address(this));
-        uint256 amountPerMilliSecond = TOTAL_REWARDS_AMOUNT * 1000 / 60 days;
-
         assertGt(postRewardsTokenBalance, prevRewardsTokenBalance);
     }
 
