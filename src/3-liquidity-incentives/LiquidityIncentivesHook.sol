@@ -12,7 +12,7 @@ import "./StakingRewards.sol";
  *               `-' '  ` `-' ' ' `-' `-' `-' ` '   ' ' `-' `-' `-' ` ' ' ' `-' ' `
  *
  *   @title      LiquidityIncentivesHook
- *   @notice     Proof of concept implementation for a Liquidity Incentives Hook.
+ *   @notice     Proof of concept implementation for a Liquidity Incentives Hook.  Unaudited, this is a proof of concept and NOT READY FOR PRODUCTION USE!
  *   @author     Umbrella Research SL
  */
 

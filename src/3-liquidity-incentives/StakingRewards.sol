@@ -1,9 +1,23 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
 import {IERC20Minimal} from "v4-core/contracts/interfaces/external/IERC20Minimal.sol";
 import {RewardsDistributionRecipient} from "./RewardsDistributionRecipient.sol";
 import {SafeMath} from "v4-core-last/lib/openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
-import {SafeMath} from "v4-core-last/lib/openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
+import {Math} from "v4-core-last/lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
+import {ReentrancyGuard} from "v4-core-last/lib/solmate/src/utils/ReentrancyGuard.sol";
 
-contract StakingRewards is RewardsDistributionRecipient {
+/**
+ *               . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . .
+ *               | | |\/| |(  |(  |-  |   |   |-|   |(  |-  `-. |-  |-| |(  |   |-|
+ *               `-' '  ` `-' ' ' `-' `-' `-' ` '   ' ' `-' `-' `-' ` ' ' ' `-' ' `
+ *
+ *   @title      StakingRewards
+ *   @notice     Modified version of the Uniswap StakingRewards contract, which removes the stakingToken to adapt it to Uniswap V4. Unaudited, this is a proof of concept and NOT READY FOR PRODUCTION USE!
+ *   @author     Umbrella Research SL
+ */
+
+contract StakingRewards is RewardsDistributionRecipient, ReentrancyGuard {
     using SafeMath for uint256;
 
     error CallerNotRewardsDistribution();
@@ -43,7 +57,7 @@ contract StakingRewards is RewardsDistributionRecipient {
     }
 
     function lastTimeRewardApplicable() public view returns (uint256) {
-        return block.timestamp < periodFinish ? block.timestamp : periodFinish; 
+        return Math.min(block.timestamp, periodFinish);
     }
 
     function rewardPerToken() public view returns (uint256) {
@@ -69,19 +83,18 @@ contract StakingRewards is RewardsDistributionRecipient {
 
     function _stake(uint256 _amount, address _user) internal {
         updateReward(_user);
-        _totalSupply = _totalSupply + _amount;
+        _totalSupply = _totalSupply.add(_amount);
         _balances[_user] = _balances[_user].add(_amount);
         emit Staked(_user, _amount);
     }
 
     function _withdraw(uint256 _amount, address _user) internal {
-        _totalSupply = _totalSupply - _amount;
+        _totalSupply = _totalSupply.sub(_amount);
         _balances[_user] = _balances[_user].sub(_amount);
         emit Withdrawn(_user, _amount);
     }
 
-    // TODO: REMEMBER CALLING  NON REENTRANT
-    function getReward() public {
+    function getReward() public nonReentrant {
         updateReward(msg.sender);
         uint256 reward = rewards[msg.sender];
         if (reward > 0) {
@@ -102,11 +115,11 @@ contract StakingRewards is RewardsDistributionRecipient {
         updateReward(address(0));
 
         if (block.timestamp >= periodFinish) {
-            rewardRate = reward / rewardsDuration;
+            rewardRate = reward.div(rewardsDuration);
         } else {
-            uint256 remaining = periodFinish - block.timestamp;
-            uint256 leftover = remaining * rewardRate;
-            rewardRate = (reward + leftover) / rewardsDuration;
+            uint256 remaining = periodFinish.sub(block.timestamp);
+            uint256 leftover = remaining.mul(rewardRate);
+            rewardRate = reward.add(leftover).div(rewardsDuration);
         }
 
         // Ensure the provided reward amount is not more than the balance in the contract.
@@ -114,10 +127,10 @@ contract StakingRewards is RewardsDistributionRecipient {
         // very high values of rewardRate in the earned and rewardsPerToken functions;
         // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
         uint256 balance = rewardsToken.balanceOf(address(this));
-        require(rewardRate <= balance / rewardsDuration, "Provided reward too high");
+        require(rewardRate <= balance.div(rewardsDuration), "Provided reward too high");
 
         lastUpdateTime = block.timestamp;
-        periodFinish = block.timestamp + rewardsDuration;
+        periodFinish = block.timestamp.add(rewardsDuration);
         emit RewardAdded(reward);
     }
 

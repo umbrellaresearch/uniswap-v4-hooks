@@ -23,6 +23,18 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 import "v4-periphery/libraries/LiquidityAmounts.sol";
 
+/**
+ *               . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . .
+ *               | | |\/| |(  |(  |-  |   |   |-|   |(  |-  `-. |-  |-| |(  |   |-|
+ *               `-' '  ` `-' ' ' `-' `-' `-' ` '   ' ' `-' `-' `-' ` ' ' ' `-' ' `
+ *
+ *   @title      FullRange
+ *   @notice     Modified version from Uniswap v4 Periphery FullRange contract.
+ *   It makes actions modular to be accessible by inherited contracts. Unaudited, this is a proof of concept and NOT READY FOR PRODUCTION USE!
+ *   Original version can be found here: https://github.com/Uniswap/v4-periphery/blob/63d64fcd82bff9ec0bad89730ce28d7ffa8e4225/contracts/hooks/examples/FullRange.sol
+ *   @author     Umbrella Research SL
+ */
+
 contract FullRange is BaseHook, ILockCallback {
     using CurrencyLibrary for Currency;
     using PoolIdLibrary for PoolKey;
@@ -271,7 +283,7 @@ contract FullRange is BaseHook, ILockCallback {
             abi.encodePacked(
                 "UniV4",
                 "-",
-                IERC20Metadata(Currency.unwrap(key.currency0)).symbol(), // TODO FIX
+                IERC20Metadata(Currency.unwrap(key.currency0)).symbol(),
                 "-",
                 IERC20Metadata(Currency.unwrap(key.currency1)).symbol(),
                 "-",
@@ -353,16 +365,6 @@ contract FullRange is BaseHook, ILockCallback {
             _rebalance(key);
         }
 
-        // NOTE This lines of code have been commented out. They break the functionality of staking since liquidity and totalSupply is not the same when we stake.
-        // TODO Review this
-
-        // uint256 liquidityToRemove = FullMath.mulDiv(
-        //     uint256(-params.liquidityDelta),
-        //     poolManager.getLiquidity(poolId),
-        //     UniswapV4ERC20(pool.liquidityToken).totalSupply()
-        // );
-
-        // params.liquidityDelta = -(liquidityToRemove.toInt256());
         delta = poolManager.modifyPosition(key, params, ZERO_BYTES);
         pool.hasAccruedFees = false;
     }
