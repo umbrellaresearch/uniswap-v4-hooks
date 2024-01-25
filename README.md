@@ -9,9 +9,9 @@ This repository will contain 3 different proofs of concept, accompanied by a tut
 
 | Proof of Concept       | Tutorial Link                 |
 |------------------------|-------------------------------|
-| RBAC                   | [RBAC Tutorial](https://medium.com/@umbrellaresearch/uniswap-v4-hooks-a-deep-dive-with-captain-hook-i-6be5d1677539)  |
-| Dynamic Fees           | [Dynamic Fees Tutorial](https://medium.com/@umbrellaresearch/uniswap-v4-hooks-a-deep-dive-with-captain-hook-ii-44b0efc84e45) |
-| Liquidity Incentives   | Coming soon                   |
+| RBAC                   | [RBAC PoC](https://medium.com/@umbrellaresearch/uniswap-v4-hooks-a-deep-dive-with-captain-hook-i-6be5d1677539)  |
+| Dynamic Fees           | [Dynamic Fees PoC](https://medium.com/@umbrellaresearch/uniswap-v4-hooks-a-deep-dive-with-captain-hook-ii-44b0efc84e45) |
+| Liquidity Incentives   | [Liquidity Incentives PoC](https://medium.com/@umbrellaresearch/uniswap-v4-hooks-guide-iii-liquidity-incentives-hook-29d77fead79d)                   |
 
 ## Install
 
