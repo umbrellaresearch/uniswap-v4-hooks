@@ -1,2 +1,7 @@
-typechain/
-lib/forge-std/
+.prettierrc
+foundry.toml
+out
+lib/
+cache/
+*.sol
+dist/
