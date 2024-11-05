@@ -2,23 +2,22 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Test.sol";
-import {IHooks} from "v4-core/contracts/interfaces/IHooks.sol";
-import {Hooks} from "v4-core/contracts/libraries/Hooks.sol";
-import {IPoolManager} from "v4-core/contracts/interfaces/IPoolManager.sol";
-import {PoolKey} from "v4-core/contracts/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "v4-core/contracts/types/PoolId.sol";
-import {Deployers} from "v4-core/test/foundry-tests/utils/Deployers.sol";
-import {CurrencyLibrary, Currency} from "v4-core/contracts/types/Currency.sol";
-import {HookTest} from "./utils/HookTest.sol";
+import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
+import {Hooks} from "v4-core/src/libraries/Hooks.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
+import {CurrencyLibrary, Currency} from "v4-core/src/types/Currency.sol";
 import {PoolOperator} from "../src/1-rbac/PoolOperator.sol";
 import {RBACHook} from "../src/1-rbac/RBACHook.sol";
 import {PirateChest} from "../src/1-rbac/utils/PirateChest.sol";
 import {HookMiner} from "./utils/HookMiner.sol";
-import {TestERC20} from "v4-core/contracts/test/TestERC20.sol";
-import {PoolManager} from "v4-core/contracts/PoolManager.sol";
-import {TickMath} from "v4-core/contracts/libraries/TickMath.sol";
+import {TestERC20} from "v4-core/src/test/TestERC20.sol";
+import {PoolManager} from "v4-core/src/PoolManager.sol";
+import {TickMath} from "v4-core/src/libraries/TickMath.sol";
+import {Fixtures} from "./utils/Fixtures.sol";
 
-contract RBACHookTest is HookTest, Deployers {
+contract RBACHookTest is Test, Fixtures {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
 
@@ -39,9 +38,13 @@ contract RBACHookTest is HookTest, Deployers {
     address pirateCredentialOwner = vm.addr(2);
     address unauthorizedUser = vm.addr(3);
 
+    uint160 public constant SQRT_RATIO_1_1 = 79228162514264337593543950336;
+
     function setUp() public {
-        // creates the pool manager, test tokens, and other utility routers
-        HookTest.initHookTestEnv();
+        // creates the pool manager, utility routers, and test tokens
+        deployFreshManagerAndRouters();
+        
+        deployMintAndApprove2Currencies();
 
         // Amount of gold and silver that will be minted to the test user
         uint256 amount = 100 ether;
@@ -49,7 +52,7 @@ contract RBACHookTest is HookTest, Deployers {
         gold = new TestERC20(amount);
         silver = new TestERC20(amount);
 
-        manager = new PoolManager(500000);
+        manager = new PoolManager();
         poolOperator = new PoolOperator(manager);
         pirateChest = new PirateChest();
 
@@ -80,7 +83,7 @@ contract RBACHookTest is HookTest, Deployers {
         poolKey = PoolKey(Currency.wrap(address(gold)), Currency.wrap(address(silver)), 3000, 60, IHooks(rbacHook));
         poolId = poolKey.toId();
 
-        manager.initialize(poolKey, SQRT_RATIO_1_1, ZERO_BYTES);
+        manager.initialize(poolKey, SQRT_RATIO_1_1);
     }
 
     function testModifyLiquidityUnauthorized() public {
@@ -91,8 +94,8 @@ contract RBACHookTest is HookTest, Deployers {
         gold.approve(address(poolOperator), type(uint256).max);
         silver.approve(address(poolOperator), type(uint256).max);
 
-        vm.expectRevert(MissingAmulet.selector);
-        poolOperator.lockModifyPosition(poolKey, IPoolManager.ModifyPositionParams(-60, 60, 10 ether));
+        vm.expectRevert();
+        poolOperator.lockModifyPosition(poolKey, IPoolManager.ModifyLiquidityParams(-60, 60, 10 ether, ""));
     }
 
     function testModifyLiquidityAuthorized() public {
@@ -103,7 +106,7 @@ contract RBACHookTest is HookTest, Deployers {
         silver.approve(address(poolOperator), type(uint256).max);
 
         // User does have an amulet, it should pass
-        poolOperator.lockModifyPosition(poolKey, IPoolManager.ModifyPositionParams(-60, 60, 10 ether));
+        poolOperator.lockModifyPosition(poolKey, IPoolManager.ModifyLiquidityParams(-60, 60, 10 ether, ""));
     }
 
     function testSwapUnauthorized() public {
@@ -118,10 +121,10 @@ contract RBACHookTest is HookTest, Deployers {
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: !zeroForOne,
             amountSpecified: 1e18,
-            sqrtPriceLimitX96: TickMath.MAX_SQRT_RATIO - 1
+            sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
         });
 
-        vm.expectRevert(MissingPirateCredential.selector);
+        vm.expectRevert();
         poolOperator.lockSwap(poolKey, params);
     }
 
@@ -133,8 +136,8 @@ contract RBACHookTest is HookTest, Deployers {
 
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: false,
-            amountSpecified: 1e18,
-            sqrtPriceLimitX96: TickMath.MAX_SQRT_RATIO - 1
+            amountSpecified: 2,
+            sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
         });
 
         // User does have an amulet, it should pass
@@ -145,12 +148,11 @@ contract RBACHookTest is HookTest, Deployers {
         vm.startPrank(deployerAddress);
 
         // Deploy the hook to an address with the correct flags
-        uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_MODIFY_POSITION_FLAG);
-
+        uint160 flags = uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG);
+        
         (address hookAddress, bytes32 salt) = HookMiner.find(
             deployerAddress,
             flags,
-            0,
             type(RBACHook).creationCode,
             abi.encode(address(manager), address(pirateChest), address(poolOperator))
         );

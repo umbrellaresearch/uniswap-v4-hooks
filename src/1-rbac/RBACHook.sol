@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import {BaseHook} from "v4-periphery/BaseHook.sol";
-import {Hooks} from "v4-core/contracts/libraries/Hooks.sol";
-import {IPoolManager} from "v4-core/contracts/interfaces/IPoolManager.sol";
-import {PoolKey} from "v4-core/contracts/types/PoolKey.sol";
+import {BaseHook} from "v4-periphery/src/base/hooks/BaseHook.sol";
+import {Hooks} from "v4-core/src/libraries/Hooks.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {IERC1155} from "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
+
 
 /**
  *              . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . .
@@ -48,22 +51,29 @@ contract RBACHook is BaseHook {
 
     /// @dev Lists the callbacks this hook implements. The hook address prefix should reflect this:
     ///      https://github.com/Uniswap/v4-core/blob/main/docs/whitepaper-v4.pdf
-    function getHooksCalls() public pure override returns (Hooks.Calls memory) {
-        return Hooks.Calls({
+    function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
+        return Hooks.Permissions({
             beforeInitialize: false,
             afterInitialize: false,
-            beforeModifyPosition: true,
-            afterModifyPosition: false,
+            beforeAddLiquidity: true,
+            afterAddLiquidity: false,
+            beforeRemoveLiquidity: true,
+            afterRemoveLiquidity: false,
             beforeSwap: true,
             afterSwap: false,
             beforeDonate: false,
-            afterDonate: false
+            afterDonate: false,
+            beforeSwapReturnDelta: false,
+            afterSwapReturnDelta: false,
+            afterAddLiquidityReturnDelta: false,
+            afterRemoveLiquidityReturnDelta: false
         });
     }
 
     ////////////////////////////////
     ////// Action Callbacks ////////
     ////////////////////////////////
+
 
     /// @notice Ensures the original user possesses the necessary credential to perform swaps on this pool
     /// @param sender The address that initiated the swap. It will revert if it is not the allowed operator.
@@ -72,7 +82,7 @@ contract RBACHook is BaseHook {
         external
         view
         override
-        returns (bytes4)
+        returns (bytes4, BeforeSwapDelta, uint24)
     {
         if (sender != allowedPoolOperator) {
             revert NotPoolOperator();
@@ -84,16 +94,16 @@ contract RBACHook is BaseHook {
             revert MissingPirateCredential();
         }
 
-        return BaseHook.beforeSwap.selector;
+        return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
     }
 
     /// @notice Ensures the original user possesses the necessary credential to modify liquidity positions on this pool
     /// @param sender The address that initiated the modifyPosition. It will revert if it is not the allowed operator.
     /// @param hookData Extra custom data for the hook, contains the original user address (who initiated the transaction)
-    function beforeModifyPosition(
+    function beforeAddLiquidity(
         address sender,
         PoolKey calldata,
-        IPoolManager.ModifyPositionParams calldata,
+        IPoolManager.ModifyLiquidityParams calldata,
         bytes calldata hookData
     ) external view override returns (bytes4) {
         if (sender != allowedPoolOperator) {
@@ -106,7 +116,7 @@ contract RBACHook is BaseHook {
             revert MissingAmulet();
         }
 
-        return BaseHook.beforeModifyPosition.selector;
+        return BaseHook.beforeAddLiquidity.selector;
     }
 
     //////////////////////////////////

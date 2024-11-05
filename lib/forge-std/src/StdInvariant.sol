@@ -3,10 +3,20 @@ pragma solidity >=0.6.2 <0.9.0;
 
 pragma experimental ABIEncoderV2;
 
-contract StdInvariant {
+abstract contract StdInvariant {
     struct FuzzSelector {
         address addr;
         bytes4[] selectors;
+    }
+
+    struct FuzzArtifactSelector {
+        string artifact;
+        bytes4[] selectors;
+    }
+
+    struct FuzzInterface {
+        address addr;
+        string[] artifacts;
     }
 
     address[] private _excludedContracts;
@@ -17,8 +27,11 @@ contract StdInvariant {
     string[] private _excludedArtifacts;
     string[] private _targetedArtifacts;
 
-    FuzzSelector[] private _targetedArtifactSelectors;
+    FuzzArtifactSelector[] private _targetedArtifactSelectors;
+
     FuzzSelector[] private _targetedSelectors;
+
+    FuzzInterface[] private _targetedInterfaces;
 
     // Functions for users:
     // These are intended to be called in tests.
@@ -39,7 +52,7 @@ contract StdInvariant {
         _targetedArtifacts.push(newTargetedArtifact_);
     }
 
-    function targetArtifactSelector(FuzzSelector memory newTargetedArtifactSelector_) internal {
+    function targetArtifactSelector(FuzzArtifactSelector memory newTargetedArtifactSelector_) internal {
         _targetedArtifactSelectors.push(newTargetedArtifactSelector_);
     }
 
@@ -53,6 +66,10 @@ contract StdInvariant {
 
     function targetSender(address newTargetedSender_) internal {
         _targetedSenders.push(newTargetedSender_);
+    }
+
+    function targetInterface(FuzzInterface memory newTargetedInterface_) internal {
+        _targetedInterfaces.push(newTargetedInterface_);
     }
 
     // Functions for forge:
@@ -74,7 +91,7 @@ contract StdInvariant {
         targetedArtifacts_ = _targetedArtifacts;
     }
 
-    function targetArtifactSelectors() public view returns (FuzzSelector[] memory targetedArtifactSelectors_) {
+    function targetArtifactSelectors() public view returns (FuzzArtifactSelector[] memory targetedArtifactSelectors_) {
         targetedArtifactSelectors_ = _targetedArtifactSelectors;
     }
 
@@ -88,5 +105,9 @@ contract StdInvariant {
 
     function targetSenders() public view returns (address[] memory targetedSenders_) {
         targetedSenders_ = _targetedSenders;
+    }
+
+    function targetInterfaces() public view returns (FuzzInterface[] memory targetedInterfaces_) {
+        targetedInterfaces_ = _targetedInterfaces;
     }
 }

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import {ILockCallback} from "v4-core/contracts/interfaces/callback/ILockCallback.sol";
-import {PoolKey} from "v4-core/contracts/types/PoolKey.sol";
-import {IPoolManager} from "v4-core/contracts/interfaces/IPoolManager.sol";
-import {BalanceDelta} from "v4-core/contracts/types/BalanceDelta.sol";
-import {Currency, CurrencyLibrary} from "v4-core/contracts/types/Currency.sol";
+import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
+import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
+import {Currency, CurrencyLibrary} from "v4-core/src/types/Currency.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "forge-std/console.sol";
 
 /**
  *               . . .  . .-. .-. .-. .   .   .-.   .-. .-. .-. .-. .-. .-. .-. . .
@@ -18,7 +19,7 @@ import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
  *               in order to allow users to perform swaps and modifyPosition operations.
  *   @author     Umbrella Research SL
  */
-contract PoolOperator is ILockCallback {
+contract PoolOperator is IUnlockCallback {
     using CurrencyLibrary for Currency;
 
     /// @dev Thrown when msg.sender is not the pool operator (this contract)
@@ -56,7 +57,7 @@ contract PoolOperator is ILockCallback {
     /// @param key Uniquely identifies the pool to use for the swap
     /// @param params Describes the swap operation
     function lockSwap(PoolKey memory key, IPoolManager.SwapParams memory params) public {
-        poolManager.lock(abi.encodeCall(this.performSwap, (key, params, msg.sender)));
+        poolManager.unlock(abi.encodeCall(this.performSwap, (key, params, msg.sender))); // TODO change with unlock()
     }
 
     /// @notice Modifies a liquidity position
@@ -64,8 +65,8 @@ contract PoolOperator is ILockCallback {
     ///      callback
     /// @param key Uniquely identifies the pool to use for the swap
     /// @param params Describes the modifyPosition operation
-    function lockModifyPosition(PoolKey memory key, IPoolManager.ModifyPositionParams memory params) public {
-        poolManager.lock(abi.encodeCall(this.performModifyPosition, (key, params, msg.sender)));
+    function lockModifyPosition(PoolKey memory key, IPoolManager.ModifyLiquidityParams memory params) public {
+        poolManager.unlock(abi.encodeCall(this.performModifyPosition, (key, params, msg.sender))); // TODO change with unlock()
     }
 
     ///////////////////////////////////////
@@ -75,10 +76,11 @@ contract PoolOperator is ILockCallback {
     /// @dev Callback from Uniswap V4 Pool Manager once the lock is acquired, so that pool actions can be performed.
     ///      The data will be a payload to execute against this contract.
     /// @param data Necessary data to perform the desired operations
-    function lockAcquired(bytes calldata data) external virtual poolManagerOnly returns (bytes memory) {
-        (bool success, bytes memory returnData) = address(this).call(data);
+    function unlockCallback(bytes calldata data) external virtual poolManagerOnly returns (bytes memory) {
+        (bool success, bytes memory returnData) = address(this).call(data); // TODO change with unlockCallback
         if (success) return returnData;
         if (returnData.length == 0) revert LockFailure();
+        
         // If the call failed, bubble up the reason
         assembly ("memory-safe") {
             revert(add(returnData, 32), mload(returnData))
@@ -104,23 +106,25 @@ contract PoolOperator is ILockCallback {
         // Swapping token0 for token1
         if (params.zeroForOne) {
             // User owes tokens to the pool
-            if (delta.amount0() > 0) {
+            if (delta.amount0() < 0) {
                 IERC20(Currency.unwrap(key.currency0)).transfer(address(poolManager), uint128(delta.amount0()));
-                poolManager.settle(key.currency0);
+                poolManager.sync(key.currency0);
+                poolManager.settle();
             }
             // Pool owes tokens to the user
-            if (delta.amount1() < 0) {
+            if (delta.amount1() > 0) {
                 poolManager.take(key.currency1, user, uint128(-delta.amount1()));
             }
             // Swapping token1 for token0
         } else {
             // User owes tokens to the pool
-            if (delta.amount1() > 0) {
+            if (delta.amount1() < 0) {
                 IERC20(Currency.unwrap(key.currency1)).transfer(address(poolManager), uint128(delta.amount1()));
-                poolManager.settle(key.currency1);
+                poolManager.sync(key.currency1);
+                poolManager.settle();
             }
             // Pool owes tokens to the user
-            if (delta.amount0() < 0) {
+            if (delta.amount0() > 0) {
                 poolManager.take(key.currency0, user, uint128(-delta.amount0()));
             }
         }
@@ -130,35 +134,37 @@ contract PoolOperator is ILockCallback {
     /// @param key Unique identifier for the pool
     /// @param params ModifyPosition parameters
     /// @param user User address who wants to modify his liquidity position
-    function performModifyPosition(PoolKey memory key, IPoolManager.ModifyPositionParams memory params, address user)
+    function performModifyPosition(PoolKey memory key, IPoolManager.ModifyLiquidityParams memory params, address user)
         external
         poolOperatorOnly
         returns (BalanceDelta delta)
     {
         // Call `modifyPosition` with the user address (initiator) encoded as `hookData`
-        delta = poolManager.modifyPosition(key, params, abi.encode(user));
+        (delta, ) = poolManager.modifyLiquidity(key, params, abi.encode(user));
         // At this point, the `beforeModifyPosition` in our hook contract has already been executed
 
         // User owes tokens to the pool
-        if (delta.amount0() > 0) {
-            IERC20(Currency.unwrap(key.currency0)).transferFrom(user, address(poolManager), uint128(delta.amount0()));
-            poolManager.settle(key.currency0);
+        if (delta.amount0() < 0) {
+            poolManager.sync(key.currency0);
+            IERC20(Currency.unwrap(key.currency0)).transferFrom(user, address(poolManager), uint128(-delta.amount0()));
+            poolManager.settle();
         }
 
         // Pool owes tokens to the user
-        if (delta.amount0() < 0) {
-            poolManager.take(key.currency0, user, uint128(-delta.amount0()));
+        if (delta.amount0() > 0) {
+            poolManager.take(key.currency0, user, uint128(delta.amount0()));
         }
 
         // User owes tokens to the pool
-        if (delta.amount1() > 0) {
-            IERC20(Currency.unwrap(key.currency1)).transferFrom(user, address(poolManager), uint128(delta.amount1()));
-            poolManager.settle(key.currency1);
+        if (delta.amount1() < 0) {
+            poolManager.sync(key.currency1);
+            IERC20(Currency.unwrap(key.currency1)).transferFrom(user, address(poolManager), uint128(-delta.amount1()));
+            poolManager.settle();
         }
 
         // Pool owes tokens to the user
-        if (delta.amount1() < 0) {
-            poolManager.take(key.currency1, user, uint128(-delta.amount1()));
+        if (delta.amount1() > 0) {
+            poolManager.take(key.currency1, user, uint128(delta.amount1()));
         }
     }
 }
